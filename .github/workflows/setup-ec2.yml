@@ -1,21 +1,20 @@
-name: Setup EC2 with Nginx
+name: Provision EC2 Instance in Specific Subnet
 
 on:
-  workflow_dispatch:  # Allows manual triggering of the workflow
+  workflow_dispatch:
 
 jobs:
   setup-ec2:
     runs-on: ubuntu-latest
 
     env:
-      INSTANCE_TYPE: t2.micro                 # Change if needed
-      AMI_ID: ami-005fc0f236362e99f           # Ubuntu 22.04 LTS AMI ID (update to correct region AMI)
-      VOLUME_SIZE: 30                          # Root volume size in GB
-      KEY_PAIR_NAME: github-keypair            # Name of the EC2 key pair to create
-      SECURITY_GROUP_NAME: wordpress-sg        # Name of the security group
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3 
+      INSTANCE_TYPE: t2.micro                     # Specify instance type
+      AMI_ID: ami-005fc0f236362e99f              # Ubuntu 22.04 AMI ID (verify for your region)
+      VOLUME_SIZE: 30                             # Root volume size in GB
+      KEY_PAIR_NAME: github-keypair               # EC2 Key Pair name
+      SECURITY_GROUP_NAME: github-sg              # Security Group name
+      SUBNET_ID: ${{ secrets.SUBNET_ID }}         # Subnet ID for us-east-1a
+
     steps:
       - name: Set up AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -24,80 +23,63 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Verify AMI ID
+        run: |
+          echo "Verifying AMI ID in ${AWS_REGION} region..."
+          aws ec2 describe-images --image-ids ${{ env.AMI_ID }} || exit 1
+
       - name: Create EC2 Key Pair
         id: create_key
         run: |
+          echo "Creating Key Pair..."
           aws ec2 delete-key-pair --key-name ${{ env.KEY_PAIR_NAME }} || true
-          KEY_PAIR=$(aws ec2 create-key-pair --key-name ${{ env.KEY_PAIR_NAME }} --query 'KeyMaterial' --output text)
+          KEY_PAIR=$(aws ec2 create-key-pair --key-name ${{ env.KEY_PAIR_NAME }} --query 'KeyMaterial' --output text) || { echo "Failed to create key pair"; exit 1; }
           echo "${KEY_PAIR}" > private_key.pem
           chmod 400 private_key.pem
           echo "PRIVATE_KEY=${KEY_PAIR}" >> $GITHUB_ENV
 
-      - name: Store Private Key in GitHub Secret
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { Octokit } = require("@octokit/action");
-            const octokit = new Octokit();
-            
-            await octokit.actions.createOrUpdateRepoSecret({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              secret_name: "EC2_PRIVATE_KEY",
-              encrypted_value: process.env.PRIVATE_KEY
-            });
-
       - name: Create Security Group
         id: create_sg
         run: |
-          VPC_ID=$(aws ec2 describe-vpcs --query "Vpcs[0].VpcId" --output text)
-          SECURITY_GROUP_ID=$(aws ec2 create-security-group --group-name ${{ env.SECURITY_GROUP_NAME }} --description "Security group for WordPress server" --vpc-id $VPC_ID --query "GroupId" --output text)
+          echo "Creating Security Group..."
+          VPC_ID=$(aws ec2 describe-vpcs --query "Vpcs[0].VpcId" --output text) || { echo "Failed to get VPC ID"; exit 1; }
+          SECURITY_GROUP_ID=$(aws ec2 create-security-group --group-name ${{ env.SECURITY_GROUP_NAME }} --description "GitHub Actions SG" --vpc-id $VPC_ID --query "GroupId" --output text) || { echo "Failed to create security group"; exit 1; }
           
-          # Allow SSH only from the current IP (replace YOUR_IP with your actual IP or dynamically retrieve)
-          aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 22 --cidr YOUR_IP/32
-          
-          # Allow HTTP (80) and HTTPS (443) from anywhere
-          aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 80 --cidr 0.0.0.0/0
-          aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 443 --cidr 0.0.0.0/0
+          # Allow SSH from a specific IP (replace YOUR_IP)
+          aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 22 --cidr YOUR_IP/32 || { echo "Failed to set SSH rule"; exit 1; }
+          # Allow HTTP/HTTPS from anywhere
+          aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 80 --cidr 0.0.0.0/0 || { echo "Failed to set HTTP rule"; exit 1; }
+          aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 443 --cidr 0.0.0.0/0 || { echo "Failed to set HTTPS rule"; exit 1; }
           
           echo "SECURITY_GROUP_ID=${SECURITY_GROUP_ID}" >> $GITHUB_ENV
 
-      - name: Launch EC2 Instance
+      - name: Launch EC2 Instance in Subnet
         id: ec2
         run: |
+          echo "Launching EC2 Instance in subnet ${SUBNET_ID}..."
           INSTANCE_ID=$(aws ec2 run-instances \
             --image-id ${{ env.AMI_ID }} \
             --instance-type ${{ env.INSTANCE_TYPE }} \
             --key-name ${{ env.KEY_PAIR_NAME }} \
             --security-group-ids ${{ env.SECURITY_GROUP_ID }} \
+            --subnet-id ${{ env.SUBNET_ID }} \
             --block-device-mappings DeviceName=/dev/sda1,Ebs={VolumeSize=${{ env.VOLUME_SIZE }}} \
             --query "Instances[0].InstanceId" \
-            --output text)
+            --output text) || { echo "Instance launch failed"; exit 1; }
           echo "INSTANCE_ID=${INSTANCE_ID}" >> $GITHUB_ENV
 
       - name: Wait for EC2 Instance to be Running
         run: |
-          aws ec2 wait instance-running --instance-ids ${{ env.INSTANCE_ID }}
+          echo "Waiting for EC2 instance to start..."
+          aws ec2 wait instance-running --instance-ids ${{ env.INSTANCE_ID }} || { echo "Instance failed to reach 'running' state"; exit 1; }
 
-      - name: Get EC2 Public IP
+      - name: Retrieve EC2 Public IP
         id: get_ip
         run: |
+          echo "Retrieving EC2 Public IP..."
           PUBLIC_IP=$(aws ec2 describe-instances \
             --instance-ids ${{ env.INSTANCE_ID }} \
             --query "Reservations[0].Instances[0].PublicIpAddress" \
-            --output text)
+            --output text) || { echo "Failed to get public IP"; exit 1; }
           echo "PUBLIC_IP=${PUBLIC_IP}" >> $GITHUB_ENV
-
-      - name: Store EC2 Public IP as GitHub Secret
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { Octokit } = require("@octokit/action");
-            const octokit = new Octokit();
-            
-            await octokit.actions.createOrUpdateRepoSecret({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              secret_name: "EC2_PUBLIC_IP",
-              encrypted_value: process.env.PUBLIC_IP
-            });
+          echo "EC2 Instance Public IP: ${PUBLIC_IP}"
