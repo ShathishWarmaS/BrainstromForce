@@ -43,17 +43,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
-            const { Octokit } = require("@octokit/rest");
-            const octokit = new Octokit({
-              auth: process.env.GITHUB_TOKEN
-            });
-
-            // Read the private key file
             const fs = require('fs');
             const privateKey = fs.readFileSync('private_key.pem', 'utf8');
-
+            
             // Store the private key in GitHub Secrets
-            await octokit.actions.createOrUpdateRepoSecret({
+            await github.actions.createOrUpdateRepoSecret({
               owner: context.repo.owner,
               repo: context.repo.repo,
               secret_name: "EC2_PRIVATE_KEY",
