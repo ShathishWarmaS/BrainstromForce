@@ -9,7 +9,7 @@ jobs:
 
     env:
       INSTANCE_TYPE: t2.micro                 # Change if needed
-      AMI_ID: ami-04505e74c0741db8d            # Ubuntu 22.04 LTS AMI ID (update to correct region AMI)
+      AMI_ID: ami-005fc0f236362e99f           # Ubuntu 22.04 LTS AMI ID (update to correct region AMI)
       VOLUME_SIZE: 30                          # Root volume size in GB
       KEY_PAIR_NAME: github-keypair            # Name of the EC2 key pair to create
       SECURITY_GROUP_NAME: wordpress-sg        # Name of the security group
