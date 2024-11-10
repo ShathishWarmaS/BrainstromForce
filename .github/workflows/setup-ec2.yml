@@ -11,7 +11,7 @@ jobs:
       INSTANCE_TYPE: t2.micro                     # Specify instance type
       AMI_ID: ami-005fc0f236362e99f              # Ubuntu 22.04 AMI ID (verify for your region)
       VOLUME_SIZE: 30                             # Root volume size in GB
-      KEY_PAIR_NAME: github-keypair               # EC2 Key Pair name
+      KEY_PAIR_NAME: brain-key-pair             # EC2 Key Pair name
       SECURITY_GROUP_NAME: github-sg              # Security Group name
       SUBNET_ID: ${{ secrets.SUBNET_ID }}         # Subnet ID for us-east-1a
 
