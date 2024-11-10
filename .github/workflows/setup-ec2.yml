@@ -36,7 +36,25 @@ jobs:
           KEY_PAIR=$(aws ec2 create-key-pair --key-name ${{ env.KEY_PAIR_NAME }} --query 'KeyMaterial' --output text) || { echo "Failed to create key pair"; exit 1; }
           echo "${KEY_PAIR}" > private_key.pem
           chmod 400 private_key.pem
-          echo "PRIVATE_KEY=${KEY_PAIR}" >> $GITHUB_ENV
+          
+      - name: Store Private Key in GitHub Secret (optional)
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { Octokit } = require("@octokit/action");
+            const octokit = new Octokit();
+
+            // Read the private key file
+            const fs = require('fs');
+            const privateKey = fs.readFileSync('private_key.pem', 'utf8');
+
+            // Store the private key in GitHub Secrets (optional)
+            await octokit.actions.createOrUpdateRepoSecret({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              secret_name: "EC2_PRIVATE_KEY",
+              encrypted_value: privateKey
+            });
 
       - name: Create Security Group
         id: create_sg
