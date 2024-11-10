@@ -13,7 +13,9 @@ jobs:
       VOLUME_SIZE: 30                          # Root volume size in GB
       KEY_PAIR_NAME: github-keypair            # Name of the EC2 key pair to create
       SECURITY_GROUP_NAME: wordpress-sg        # Name of the security group
-
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3 
     steps:
       - name: Set up AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
