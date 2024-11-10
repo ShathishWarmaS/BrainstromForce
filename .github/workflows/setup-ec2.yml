@@ -37,7 +37,7 @@ jobs:
           SECURITY_GROUP_ID=$(aws ec2 create-security-group --group-name ${{ env.SECURITY_GROUP_NAME }} --description "GitHub Actions SG" --vpc-id $VPC_ID --query "GroupId" --output text) || { echo "Failed to create security group"; exit 1; }
           
           # Allow SSH from a specific IP (replace YOUR_IP)
-          aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 22 --cidr YOUR_IP/32 || { echo "Failed to set SSH rule"; exit 1; }
+          aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 || { echo "Failed to set SSH rule"; exit 1; }
           # Allow HTTP/HTTPS from anywhere
           aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 80 --cidr 0.0.0.0/0 || { echo "Failed to set HTTP rule"; exit 1; }
           aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 443 --cidr 0.0.0.0/0 || { echo "Failed to set HTTPS rule"; exit 1; }
