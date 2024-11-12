@@ -1,0 +1,36 @@
+name: CI/CD WordPress Deployment
+
+on:
+  push:
+    branches: [main]  # Trigger deployment on push to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy to VPS
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << 'EOF'
+            echo "Starting deployment on server $SERVER_IP"
+
+            # Navigate to the WordPress directory and update code
+            cd /var/www/html/wordpress || exit
+            git pull origin main
+
+            # Restart services to apply changes
+            sudo systemctl restart nginx
+            sudo systemctl restart php8.1-fpm
+
+            echo "Deployment completed successfully on server $SERVER_IP"
+          EOF
