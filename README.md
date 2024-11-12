@@ -137,4 +137,14 @@ This project automates the deployment of a WordPress website on an AWS EC2 insta
 	•	Backup Directory: MySQL backups are scheduled and stored in /var/backups/mysql. You can customize the backup schedule and location as needed.
 	•	Log Files: Terraform and user data logs are stored on the server for debugging, primarily in /var/log/user_data.log.                            
 
-            
+# Wordpress Main Page
+
+![Alt text for the image](images/main.png)  
+
+# Wordpress Login Page
+
+![Alt text for the image](images/login.png)    
+
+# Wordpress Welcome Page
+
+![Alt text for the image](images/welcome.png)         
