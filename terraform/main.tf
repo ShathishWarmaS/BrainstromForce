@@ -1,53 +1,60 @@
+# Configure the AWS provider
 provider "aws" {
-  region = var.aws_region
+  region = var.aws_region  # Specify the AWS region, e.g., "us-east-1"
 }
 
-# Define security group for EC2 instance
+# Define security group for EC2 instance that will host the WordPress site
 resource "aws_security_group" "wordpress_sg" {
-  name = "wordpress-sg"
+  name = "wordpress-sg"  # Name of the security group
 
+  # Inbound rule to allow SSH access from a specified IP range
   ingress {
-    from_port   = 22
+    from_port   = 22              # SSH port
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.ssh_cidr_block]
+    cidr_blocks = [var.ssh_cidr_block]  # Restrict SSH access to specific IPs for security
   }
 
+  # Inbound rule to allow HTTP access on port 80 from a specified IP range
   ingress {
-    from_port   = 80
+    from_port   = 80              # HTTP port
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [var.ssh_cidr_block]
-  }
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = [var.ssh_cidr_block]
+    cidr_blocks = [var.ssh_cidr_block]  # Set this to "0.0.0.0/0" to allow public HTTP access if needed
   }
 
+  # Inbound rule to allow HTTPS access on port 443 from a specified IP range
+  ingress {
+    from_port   = 443             # HTTPS port
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.ssh_cidr_block]  # Set this to "0.0.0.0/0" to allow public HTTPS access if needed
+  }
+
+  # Outbound rule to allow all traffic from the instance to the internet
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [var.ssh_cidr_block]
+    protocol    = "-1"            # -1 indicates all protocols
+    cidr_blocks = [var.ssh_cidr_block]  # Allow all outbound traffic, e.g., for updates and API requests
   }
 }
 
-# EC2 Instance for WordPress
+# Define the EC2 instance that will host the WordPress website
 resource "aws_instance" "wordpress" {
-  ami                    = var.ami_id
-  instance_type          = var.instance_type
-  key_name               = var.ssh_key_name
-  vpc_security_group_ids = [aws_security_group.wordpress_sg.id]
+  ami                    = var.ami_id                 # Amazon Machine Image ID for the desired OS
+  instance_type          = var.instance_type          # EC2 instance type, e.g., "t2.micro"
+  key_name               = var.ssh_key_name           # SSH key pair name for access to the instance
+  vpc_security_group_ids = [aws_security_group.wordpress_sg.id]  # Attach the security group created above
 
+  # Configure the root EBS volume for the instance
   root_block_device {
-    volume_type = "gp3"
-    volume_size = 30
+    volume_type = "gp3"          # Volume type (gp3 offers cost-effective general-purpose performance)
+    volume_size = 30             # Size of the root volume in GB
   }
 
-  # Pass variables to user_data for WordPress installation
-  user_data = templatefile("user_data.sh", {
+  # Pass necessary environment variables for WordPress setup using user data
+  user_data = templatefile("user_data.sh", {        # user_data.sh contains the setup script for WordPress
     MYSQL_ROOT_PASSWORD       = var.mysql_root_password,
     PHP_VERSION               = var.php_version,
     WORDPRESS_DB_NAME         = var.wordpress_db_name,
@@ -61,24 +68,25 @@ resource "aws_instance" "wordpress" {
     BACKUP_DIR                = var.backup_dir
   })
 
+  # Tags to help identify and manage the instance
   tags = {
-    Name = "WordPress-Server"
+    Name = "WordPress-Server"  # Tag to easily identify the instance in the AWS Console
   }
 }
 
-# Elastic IP Allocation
+# Allocate an Elastic IP (EIP) and associate it with the EC2 instance
 resource "aws_eip" "wordpress_eip" {
-  instance = aws_instance.wordpress.id
-  vpc      = true  # Specifies that the EIP is for use in a VPC
+  instance = aws_instance.wordpress.id  # Associate the EIP with the WordPress EC2 instance
+  vpc      = true                       # Ensures the EIP is allocated within the VPC
 }
 
-# Route 53 Record
+# Create a DNS A record in Route 53 to point to the Elastic IP of the WordPress instance
 resource "aws_route53_record" "wordpress_dns" {
-  zone_id = var.route53_zone_id  # The Route 53 hosted zone ID
-  name    = "brainstrom.shavini.xyz"  # Replace with your actual domain name
-  type    = "A"
-  ttl     = 300
+  zone_id = var.route53_zone_id         # Hosted zone ID in Route 53 for the domain
+  name    = "brainstrom.shavini.xyz"    # Full domain name for the WordPress site (replace with your actual domain)
+  type    = "A"                         # Record type 'A' for IP addresses
+  ttl     = 300                         # Time-to-live for the DNS record, in seconds
 
-  # Point the Route 53 record to the Elastic IP
+  # Set the DNS record to point to the public IP of the Elastic IP
   records = [aws_eip.wordpress_eip.public_ip]
 }

@@ -1,22 +1,34 @@
+# GitHub Actions Workflow for CI/CD WordPress Deployment
+# This workflow automates the deployment of a WordPress site to a VPS server.
+# It uses SSH to connect to the server and update the WordPress site on every push to the 'main' branch.
+
 name: CI/CD WordPress Deployment
 
+# Trigger this workflow on every push to the main branch
 on:
   push:
-    branches: [main]  # Trigger deployment on push to the main branch
+    branches: [main]  # Adjust this branch name if needed to match your deployment branch
 
 jobs:
   deploy:
+    # Specify the type of virtual machine to run this job on
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout code from the repository
       - name: Checkout code
         uses: actions/checkout@v2
+        # This step pulls the code from the current repository and branch (main) so it can be accessed in the workflow
 
+      # Step 2: Set up SSH
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.5.3
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        # This step configures SSH access using the private key stored in GitHub Secrets as 'SSH_PRIVATE_KEY'.
+        # It allows the workflow to securely SSH into the VPS server.
 
+      # Step 3: Deploy to VPS Server
       - name: Deploy to VPS
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
@@ -24,13 +36,21 @@ jobs:
           ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << 'EOF'
             echo "Starting deployment on server $SERVER_IP"
 
-            # Navigate to the WordPress directory and update code
+            # Navigate to the WordPress installation directory on the server
             cd /var/www/html/wordpress || exit
+
+            # Pull the latest code from the main branch on GitHub
             git pull origin main
 
-            # Restart services to apply changes
+            # Restart Nginx to apply updates to server configuration or content
             sudo systemctl restart nginx
+
+            # Restart PHP to ensure any updated PHP settings are applied
             sudo systemctl restart php8.1-fpm
 
             echo "Deployment completed successfully on server $SERVER_IP"
           EOF
+        # Explanation of SSH commands in this step:
+        # - Connects to the VPS using SSH with SERVER_IP from GitHub Secrets.
+        # - Updates the WordPress site by pulling the latest code.
+        # - Restarts Nginx and PHP services to apply any updates made to configurations or code.
